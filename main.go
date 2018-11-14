@@ -4,13 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/google/go-querystring/query"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
-	"reflect"
 	"time"
 )
 
@@ -39,11 +37,8 @@ func main() {
 	var channels []string
 
 	json.Unmarshal(content, &channels)
-	streamList := GetStreamsInput{
-		UserLogin: channels,
-	}
 
-	streamInfos, err := client.GetStreams(streamList)
+	streamInfos, err := client.GetStreams(channels)
 	if err != nil {
 		fmt.Printf("Error getting twitch user: %v", err)
 	}
@@ -52,27 +47,6 @@ func main() {
 		fmt.Printf("Stream: %s - %s, %d viewers\n", streamInfo.UserName, streamInfo.Title, streamInfo.ViewerCount)
 	}
 
-} // GetStreamsInput represents the query string parameters to get streams
-// https://dev.twitch.tv/docs/api/reference#get-streams
-type GetStreamsInput struct {
-	// Cursor for forward pagination: tells the server where to start fetching the next set of results, in a multi-page response.
-	After string `url:"after"`
-	// Cursor for backward pagination: tells the server where to start fetching the next set of results, in a multi-page response.
-	Before string `url:"before"`
-	// Returns streams in a specified community ID. You can specify up to 100 IDs.
-	CommunityID []string `url:"community_id"`
-	// Maximum number of objects to return. Maximum: 100. Default: 20.
-	First int `url:"first"`
-	// Returns streams broadcasting a specified game ID. You can specify up to 100 IDs.
-	GameID []string `url:"game_id"`
-	// Stream language. You can specify up to 100 languages.
-	Language []string `url:"language"`
-	// Stream type: "all", "live", "vodcast". Default: "all".
-	Type string `url:"type"`
-	// Returns streams broadcast by one or more specified user IDs. You can specify up to 100 IDs.
-	UserID []string `url:"user_id"`
-	// Returns streams broadcast by one or more specified user login names. You can specify up to 100 names.
-	UserLogin []string `url:"user_login"`
 }
 
 // StreamData represents the data a single stream
@@ -124,11 +98,11 @@ func (c Client) doRequest(method, uri string, body io.Reader) (*http.Response, e
 
 // GetStreams will get a list of live streams
 // The url query parameter are defined by the GetStreamsInput struct
-func (c Client) GetStreams(i GetStreamsInput) ([]StreamData, error) {
+func (c Client) GetStreams(streamsList []string) ([]StreamData, error) {
 	// since first, when uninitialized is 0, we have to set it to the default value
-	if i.First == 0 {
+	/*if i.First == 0 {
 		i.First = 20
-	}
+	}*/
 
 	var uri *url.URL
 
@@ -137,7 +111,11 @@ func (c Client) GetStreams(i GetStreamsInput) ([]StreamData, error) {
 		return nil, err
 	}
 
-	uri.RawQuery = parseURLQuery(i).Encode()
+	query := uri.Query()
+	for _, stream := range streamsList {
+		query.Add("user_login", stream)
+	}
+	uri.RawQuery = query.Encode()
 	res, err := c.doRequest("GET", uri.String(), nil)
 	if err != nil {
 		return nil, err
@@ -153,21 +131,4 @@ func (c Client) GetStreams(i GetStreamsInput) ([]StreamData, error) {
 
 	json.Unmarshal(body, &s)
 	return s.Data, nil
-}
-
-func parseURLQuery(i interface{}) url.Values {
-	q, _ := query.Values(i)
-	v := url.Values{}
-	for key, value := range q {
-		for i := 0; i < len(value); i++ {
-			if !isZero(value[i]) {
-				v.Add(key, value[i])
-			}
-		}
-	}
-	return v
-}
-
-func isZero(x interface{}) bool {
-	return x == reflect.Zero(reflect.TypeOf(x)).Interface()
 }
