@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 )
 
@@ -26,8 +27,26 @@ type StreamData struct {
 	ThumbnailURL string    `json:"thumbnail_url"`
 }
 
+// UserData struct represents a user as defined by the twitch api
+type UserData struct {
+	ID              string `json:"id"`
+	Login           string `json:"login"`
+	DisplayName     string `json:"display_name"`
+	Type            string `json:"type"`
+	BroadcasterType string `json:"broadcaster_type"`
+	Description     string `json:"description"`
+	ProfileImageURL string `json:"profile_image_url"`
+	OfflineImageURL string `json:"offline_image_url"`
+	ViewCount       int    `json:"view_count"`
+	Email           string `json:"email"`
+}
+
 type streams struct {
 	Data []StreamData `json:"data"`
+}
+
+type users struct {
+	Data []UserData `json:"data"`
 }
 
 // Client represents a client to interact with the twitch API
@@ -68,7 +87,7 @@ func (c Client) doRequest(method, uri string, body io.Reader) (*http.Response, e
 
 // GetStreams will get a list of live streams
 // The url query parameter are defined by the GetStreamsInput struct
-func (c Client) GetStreams(streamsList []string) ([]StreamData, error) {
+func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 	// since first, when uninitialized is 0, we have to set it to the default value
 	/*if i.First == 0 {
 		i.First = 20
@@ -78,7 +97,7 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, error) {
 
 	uri, err := url.Parse(baseURL + getStreamsEndpoint)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	query := uri.Query()
@@ -88,12 +107,57 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, error) {
 	uri.RawQuery = query.Encode()
 	res, err := c.doRequest("GET", uri.String(), nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	defer res.Body.Close()
 
 	s := streams{}
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var token int
+	strToken, ok := res.Header["Ratelimit-Remaining"]
+	if ok {
+		if len(strToken) > 0 {
+			token, err = strconv.Atoi(strToken[0])
+			if err != nil {
+				token = 0
+			}
+		}
+	} else {
+		token = 0
+	}
+
+	json.Unmarshal(body, &s)
+	return s.Data, token, nil
+}
+
+// GetStreams will get a list of live streams
+// The url query parameter are defined by the GetStreamsInput struct
+func (c Client) GetUsers(usersList []string) ([]UserData, error) {
+	var uri *url.URL
+
+	uri, err := url.Parse(baseURL + getUsersEndpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	query := uri.Query()
+	for _, user := range usersList {
+		query.Add("login", user)
+	}
+	uri.RawQuery = query.Encode()
+	res, err := c.doRequest("GET", uri.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	defer res.Body.Close()
+
+	s := users{}
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
