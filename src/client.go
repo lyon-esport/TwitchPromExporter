@@ -1,9 +1,10 @@
-package client
+package main
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -41,11 +42,11 @@ type UserData struct {
 	Email           string `json:"email"`
 }
 
-type streams struct {
+type Streams struct {
 	Data []StreamData `json:"data"`
 }
 
-type users struct {
+type Users struct {
 	Data []UserData `json:"data"`
 }
 
@@ -85,7 +86,7 @@ func (c Client) doRequest(method, uri string, body io.Reader) (*http.Response, e
 	return res, nil
 }
 
-// GetStreams will get a list of live streams
+// GetStreams will get a list of live Streams
 // The url query parameter are defined by the GetStreamsInput struct
 func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 	// since first, when uninitialized is 0, we have to set it to the default value
@@ -112,7 +113,7 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 
 	defer res.Body.Close()
 
-	s := streams{}
+	s := Streams{}
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return nil, 0, err
@@ -130,12 +131,13 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 	} else {
 		token = 0
 	}
+	log.Debugf("Remaining tokens: %d", token)
 
 	json.Unmarshal(body, &s)
 	return s.Data, token, nil
 }
 
-// GetStreams will get a list of live streams
+// GetStreams will get a list of live Streams
 // The url query parameter are defined by the GetStreamsInput struct
 func (c Client) GetUsers(usersList []string) ([]UserData, error) {
 	var uri *url.URL
@@ -157,7 +159,7 @@ func (c Client) GetUsers(usersList []string) ([]UserData, error) {
 
 	defer res.Body.Close()
 
-	s := users{}
+	s := Users{}
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return nil, err

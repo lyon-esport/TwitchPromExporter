@@ -1,15 +1,15 @@
 package main
 
 import (
-	"TwitchLanStats/client"
-	"encoding/json"
 	"fmt"
+	"github.com/alexsasharegan/dotenv"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"io/ioutil"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -17,7 +17,7 @@ var channels []string
 var streamsData = map[string][]prometheus.Gauge{}
 var lastScrape, tokenRemaining prometheus.Gauge
 
-func setupVars(users []client.UserData) {
+func setupVars(users []UserData) {
 	// setup the vars for prometheus
 	lastScrape = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "twitch",
@@ -62,7 +62,7 @@ func setupVars(users []client.UserData) {
 	}
 }
 
-func scrapeStreams(twitch *client.Client) {
+func scrapeStreams(twitch *Client) {
 	go func() {
 		onlineStream := map[string]bool{}
 		for {
@@ -104,21 +104,42 @@ func scrapeStreams(twitch *client.Client) {
 	}()
 }
 
+type Config struct {
+	LogLevel string
+	ClientID string
+	Channels []string
+}
+
+var cfg Config
+
 func main() {
-	twitch := client.NewClient(os.Getenv("CLIENT_KEY"))
+	_ = dotenv.Load()
 
-	fd, err := os.Open("channels.json")
-	if err != nil {
-		panic("Error opening file")
+	// Setup logging before anything else
+	if len(os.Getenv("LOG_LEVEL")) == 0 {
+		cfg.LogLevel = "info"
+	} else {
+		cfg.LogLevel = os.Getenv("LOG_LEVEL")
 	}
-	content, err := ioutil.ReadAll(fd)
-	fd.Close()
+	switch cfg.LogLevel {
+	case "info":
+		log.SetLevel(log.InfoLevel)
+	case "debug":
+		log.SetLevel(log.DebugLevel)
+	case "warn":
+		log.SetLevel(log.WarnLevel)
+	case "error":
+		log.SetLevel(log.ErrorLevel)
+	}
 
-	json.Unmarshal(content, &channels)
+	twitch := NewClient(os.Getenv("CLIENT_KEY"))
+	channels = strings.Split(os.Getenv("CHANNELS"), ",")
+	log.Debugf("Channels: %s", channels)
 
 	users, err := twitch.GetUsers(channels)
 	if err != nil {
-		panic("Error opening file")
+		log.Fatal(err)
+		panic(err)
 	}
 	setupVars(users)
 	scrapeStreams(twitch)

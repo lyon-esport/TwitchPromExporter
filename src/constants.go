@@ -1,4 +1,4 @@
-package client
+package main
 
 const (
 	baseURL            = "https://api.twitch.tv/helix"
