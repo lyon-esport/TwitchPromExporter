@@ -2,16 +2,9 @@
 
 ## Run
 
-Define an **CLIENT_KEY** in yours env variable. Create a json file
-called **channels.json** with this structure:
+Define an **CLIENT_KEY** in yours env variable. \
+For the channels, define an env variable **CHANNELS**, with a list of channel separated by commas, ex:
 
-```json
-[
-  "FroggedTV",
-  "youyoud2",
-  "loserfruit",
-  "mistermv"
-]
-````
+`CHANNELS="youyoud2,froggedtv,mistermv`
 
-then `go run main`
+then `go run src/*`
