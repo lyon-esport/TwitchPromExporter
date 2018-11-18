@@ -14,7 +14,9 @@ import (
 )
 
 var channels []string
-var streamsData = map[string][]prometheus.Gauge{}
+var channelsID = make(map[string]string)
+var streamsUp = map[string]prometheus.Gauge{}
+var streamsViewers, streamsUptime *prometheus.GaugeVec
 var lastScrape, tokenRemaining prometheus.Gauge
 
 func setupVars(users []UserData) {
@@ -31,34 +33,34 @@ func setupVars(users []UserData) {
 		Help:      "Token remaining",
 	})
 
+	streamsViewers = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "twitch",
+			Name:      "viewers",
+			Help:      "Count the number of viewers",
+		},
+		[]string{"name"},
+	)
+
+	streamsUptime = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "twitch",
+			Name:      "started_at",
+			Help:      "Started at",
+		},
+		[]string{"name"},
+	)
+
 	for _, user := range users {
-		measures := []prometheus.Gauge{
-			promauto.NewGauge(prometheus.GaugeOpts{
-				Namespace: "twitch",
-				Name:      "online",
-				Help:      "Is the streamer is online",
-				ConstLabels: prometheus.Labels{
-					"name": user.DisplayName,
-				},
-			}),
-			promauto.NewGauge(prometheus.GaugeOpts{
-				Namespace: "twitch",
-				Name:      "viewers",
-				Help:      "Count the number of viewers",
-				ConstLabels: prometheus.Labels{
-					"name": user.DisplayName,
-				},
-			}),
-			promauto.NewGauge(prometheus.GaugeOpts{
-				Namespace: "twitch",
-				Name:      "started_at",
-				Help:      "Started at",
-				ConstLabels: prometheus.Labels{
-					"name": user.DisplayName,
-				},
-			}),
-		}
-		streamsData[user.ID] = measures
+		channelsID[user.ID] = user.DisplayName
+		streamsUp[user.ID] = promauto.NewGauge(prometheus.GaugeOpts{
+			Namespace: "twitch",
+			Name:      "online",
+			Help:      "Is the streamer is online",
+			ConstLabels: prometheus.Labels{
+				"name": user.DisplayName,
+			},
+		})
 	}
 }
 
@@ -67,7 +69,7 @@ func scrapeStreams(twitch *Client) {
 		onlineStream := map[string]bool{}
 		for {
 			// reset online status
-			for k := range streamsData {
+			for k := range streamsUp {
 				onlineStream[k] = false
 			}
 
@@ -85,17 +87,17 @@ func scrapeStreams(twitch *Client) {
 			for _, streamInfo := range streamInfos {
 				fmt.Printf("Stream %s: %s - %s, %d viewers\n", streamInfo.UserID, streamInfo.UserName, streamInfo.Title, streamInfo.ViewerCount)
 				onlineStream[streamInfo.UserID] = true
-				streamsData[streamInfo.UserID][0].Set(1)
-				streamsData[streamInfo.UserID][1].Set(float64(streamInfo.ViewerCount))
-				streamsData[streamInfo.UserID][2].Set(float64(streamInfo.StartedAt.Unix()))
+				streamsUp[streamInfo.UserID].Set(1)
+				streamsViewers.With(prometheus.Labels{"name": channelsID[streamInfo.UserID]}).Set(float64(streamInfo.ViewerCount))
+				streamsUptime.With(prometheus.Labels{"name": channelsID[streamInfo.UserID]}).Set(float64(streamInfo.StartedAt.Unix()))
 			}
 
 			// clean offline stream
 			for userID, online := range onlineStream {
 				if !online {
-					streamsData[userID][0].Set(0)
-					streamsData[userID][1].Set(0)
-					streamsData[userID][2].Set(0)
+					streamsUp[userID].Set(0)
+					streamsViewers.Delete(prometheus.Labels{"name": channelsID[userID]})
+					streamsUptime.Delete(prometheus.Labels{"name": channelsID[userID]})
 				}
 			}
 
