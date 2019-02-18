@@ -9,6 +9,5 @@ For the channels, define an env variable **CHANNELS**, with a list of channel se
 $ export CHANNELS="youyoud2,froggedtv,mistermv"
 $ export CLIENT_KEY="DFSKJFSDKJFSDKDFSJ"
 $ export LOG_LEVEL="info"
-$ go build -o exporter TwitchPromExporter/src
-$ ./exporter
+$ go run .
 ```
