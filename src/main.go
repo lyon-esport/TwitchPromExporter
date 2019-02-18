@@ -134,11 +134,13 @@ func scrapeStreams(twitch *Client) {
 				log.Fatal(err)
 				panic(err)
 			}
+			// Fill the information
 			for _, user := range users {
 				views.With(prometheus.Labels{"name": user.DisplayName}).Set(float64(user.ViewCount))
 			}
 
 			// Update the follow count with the remaining tokens
+			// Prevent exhausting all the tokens
 			for token > 5 {
 				token--
 				var sid = streamsID[streamScraped]
