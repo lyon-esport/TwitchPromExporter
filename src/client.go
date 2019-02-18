@@ -42,6 +42,10 @@ type UserData struct {
 	Email           string `json:"email"`
 }
 
+type UserFollow struct {
+	Total int `json:"total"`
+}
+
 type Streams struct {
 	Data []StreamData `json:"data"`
 }
@@ -152,6 +156,7 @@ func (c Client) GetUsers(usersList []string) ([]UserData, error) {
 		query.Add("login", user)
 	}
 	uri.RawQuery = query.Encode()
+	log.Debug("URI: ", uri.String())
 	res, err := c.doRequest("GET", uri.String(), nil)
 	if err != nil {
 		return nil, err
@@ -167,4 +172,36 @@ func (c Client) GetUsers(usersList []string) ([]UserData, error) {
 
 	json.Unmarshal(body, &s)
 	return s.Data, nil
+}
+
+// GetStreams will get a list of live Streams
+// The url query parameter are defined by the GetStreamsInput struct
+func (c Client) GetFollows(userID string) (int, error) {
+	var uri *url.URL
+
+	uri, err := url.Parse(baseURL + getUserFollow)
+	if err != nil {
+		return 0, err
+	}
+
+	query := uri.Query()
+	query.Add("to_id", userID)
+	uri.RawQuery = query.Encode()
+	log.Debug("URI: ", uri.String())
+	res, err := c.doRequest("GET", uri.String(), nil)
+	if err != nil {
+		return 0, err
+	}
+
+	defer res.Body.Close()
+
+	s := UserFollow{}
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+
+	json.Unmarshal(body, &s)
+	// fmt.Println(s.Total)
+	return s.Total, nil
 }
