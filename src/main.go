@@ -16,9 +16,7 @@ import (
 var channels []string
 var channelsID = make(map[string]string)
 var streamsUp = map[string]prometheus.Gauge{}
-var followers = map[string]prometheus.Gauge{}
-var views = map[string]prometheus.Gauge{}
-var streamsViewers, streamsUptime *prometheus.GaugeVec
+var streamsViewers, streamsUptime, views, followers *prometheus.GaugeVec
 var lastScrape, tokenRemaining prometheus.Gauge
 
 func setupVars(users []UserData) {
@@ -53,6 +51,25 @@ func setupVars(users []UserData) {
 		[]string{"name"},
 	)
 
+	// use dynamic label
+	views = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "twitch",
+			Name:      "views",
+			Help:      "Number of views",
+		},
+		[]string{"name"},
+	)
+
+	followers = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "twitch",
+			Name:      "followers",
+			Help:      "Number of followers",
+		},
+		[]string{"name"},
+	)
+
 	for _, user := range users {
 		channelsID[user.ID] = user.DisplayName
 		streamsUp[user.ID] = promauto.NewGauge(prometheus.GaugeOpts{
@@ -63,23 +80,7 @@ func setupVars(users []UserData) {
 				"name": user.DisplayName,
 			},
 		})
-		// use dynamic label
-		views[user.ID] = promauto.NewGauge(prometheus.GaugeOpts{
-			Namespace: "twitch",
-			Name:      "views",
-			Help:      "Is the streamer is online",
-			ConstLabels: prometheus.Labels{
-				"name": user.DisplayName,
-			},
-		})
-		followers[user.ID] = promauto.NewGauge(prometheus.GaugeOpts{
-			Namespace: "twitch",
-			Name:      "followers",
-			Help:      "Is the streamer is online",
-			ConstLabels: prometheus.Labels{
-				"name": user.DisplayName,
-			},
-		})
+		views.With(prometheus.Labels{"name": user.DisplayName}).Set(float64(user.ViewCount))
 	}
 }
 
@@ -90,7 +91,7 @@ func scrapeStreams(twitch *Client) {
 		for id := range channelsID {
 			streamsID = append(streamsID, id)
 		}
-		fmt.Println(streamsID)
+
 		var streamScraped = 0
 		for {
 			// reset online status
@@ -110,7 +111,7 @@ func scrapeStreams(twitch *Client) {
 
 			// process online stream
 			for _, streamInfo := range streamInfos {
-				fmt.Printf("Stream %s: %s - %s, %d viewers\n", streamInfo.UserID, streamInfo.UserName, streamInfo.Title, streamInfo.ViewerCount)
+				// fmt.Printf("Stream %s: %s - %s, %d viewers\n", streamInfo.UserID, streamInfo.UserName, streamInfo.Title, streamInfo.ViewerCount)
 				onlineStream[streamInfo.UserID] = true
 				streamsUp[streamInfo.UserID].Set(1)
 				streamsViewers.With(prometheus.Labels{"name": channelsID[streamInfo.UserID]}).Set(float64(streamInfo.ViewerCount))
@@ -126,16 +127,33 @@ func scrapeStreams(twitch *Client) {
 				}
 			}
 
-			var sid = streamsID[streamScraped]
-			followers_count, err := twitch.GetFollows(sid)
+			// Update the view count
+			token--
+			users, err := twitch.GetUsers(channels)
 			if err != nil {
-				fmt.Printf("Error getting twitch user: %v", err)
+				log.Fatal(err)
+				panic(err)
 			}
-			followers[sid].Set(float64(followers_count))
-			streamScraped++
-			if streamScraped >= len(streamsID) {
-				streamScraped = 0
+			for _, user := range users {
+				views.With(prometheus.Labels{"name": user.DisplayName}).Set(float64(user.ViewCount))
 			}
+
+			// Update the follow count with the remaining tokens
+			for token > 5 {
+				token--
+				var sid = streamsID[streamScraped]
+
+				followersCount, err := twitch.GetFollows(sid)
+				if err != nil {
+					fmt.Printf("Error getting twitch user: %v", err)
+				}
+				followers.With(prometheus.Labels{"name": channelsID[sid]}).Set(float64(followersCount))
+				streamScraped++
+				if streamScraped >= len(streamsID) {
+					streamScraped = 0
+				}
+			}
+			log.Debug("Scraped ", streamScraped, "/", len(streamsID), " stream")
 
 			time.Sleep(30 * time.Second)
 		}

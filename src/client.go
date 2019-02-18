@@ -202,6 +202,6 @@ func (c Client) GetFollows(userID string) (int, error) {
 	}
 
 	json.Unmarshal(body, &s)
-	fmt.Println(s.Total)
+	// fmt.Println(s.Total)
 	return s.Total, nil
 }
