@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/alexsasharegan/dotenv"
 	"github.com/prometheus/client_golang/prometheus"
@@ -13,13 +14,22 @@ import (
 	"time"
 )
 
+type Stream struct {
+	Name    string `json:"name"`
+	Online  bool   `json:"online"`
+	Viewers int    `json:"viewers"`
+	Views   int    `json:"views"`
+}
+
 var channels []string
+var channelsData = make(map[string]Stream)
 var channelsID = make(map[string]string)
 var streamsUp = map[string]prometheus.Gauge{}
 var streamsViewers, streamsUptime, views, followers *prometheus.GaugeVec
 var lastScrape, tokenRemaining prometheus.Gauge
 
 func setupVars(users []UserData) {
+
 	// setup the vars for prometheus
 	lastScrape = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "twitch",
@@ -71,6 +81,13 @@ func setupVars(users []UserData) {
 	)
 
 	for _, user := range users {
+		channelsData[user.ID] = Stream{
+			Name:    user.DisplayName,
+			Online:  false,
+			Viewers: 0,
+			Views:   user.ViewCount,
+		}
+		log.Debug(user)
 		channelsID[user.ID] = user.DisplayName
 		streamsUp[user.ID] = promauto.NewGauge(prometheus.GaugeOpts{
 			Namespace: "twitch",
@@ -153,6 +170,7 @@ func scrapeStreams(twitch *Client) {
 				streamScraped++
 				if streamScraped >= len(streamsID) {
 					streamScraped = 0
+					break
 				}
 			}
 			log.Debug("Scraped ", streamScraped, "/", len(streamsID), " stream")
@@ -160,6 +178,17 @@ func scrapeStreams(twitch *Client) {
 			time.Sleep(30 * time.Second)
 		}
 	}()
+}
+
+func jsonStats(w http.ResponseWriter, r *http.Request) {
+	log.Debug(len(channelsData), " Streams to serialize")
+	streamList := make([]Stream, len(channelsData))
+	var pos = 0
+	for _, stream := range channelsData {
+		streamList[pos] = stream
+		pos += 1
+	}
+	json.NewEncoder(w).Encode(streamList)
 }
 
 type Config struct {
@@ -203,5 +232,6 @@ func main() {
 	scrapeStreams(twitch)
 
 	http.Handle("/metrics", promhttp.Handler())
+	http.HandleFunc("/", jsonStats)
 	http.ListenAndServe(":2112", nil)
 }
