@@ -15,14 +15,16 @@ import (
 )
 
 type Stream struct {
-	Name    string `json:"name"`
-	Online  bool   `json:"online"`
-	Viewers int    `json:"viewers"`
-	Views   int    `json:"views"`
+	Name      string `json:"name"`
+	Online    bool   `json:"online"`
+	Uptime    int64  `json:"uptime"`
+	Followers int    `json:"followers"`
+	Viewers   int    `json:"viewers"`
+	Views     int    `json:"views"`
 }
 
 var channels []string
-var channelsData = make(map[string]Stream)
+var channelsData = make(map[string]*Stream)
 var channelsID = make(map[string]string)
 var streamsUp = map[string]prometheus.Gauge{}
 var streamsViewers, streamsUptime, views, followers *prometheus.GaugeVec
@@ -81,7 +83,7 @@ func setupVars(users []UserData) {
 	)
 
 	for _, user := range users {
-		channelsData[user.ID] = Stream{
+		channelsData[user.ID] = &Stream{
 			Name:    user.DisplayName,
 			Online:  false,
 			Viewers: 0,
@@ -103,7 +105,6 @@ func setupVars(users []UserData) {
 
 func scrapeStreams(twitch *Client) {
 	go func() {
-		onlineStream := map[string]bool{}
 		var streamsID []string
 		for id := range channelsID {
 			streamsID = append(streamsID, id)
@@ -111,13 +112,10 @@ func scrapeStreams(twitch *Client) {
 
 		var streamScraped = 0
 		for {
-			// reset online status
-			for k := range streamsUp {
-				onlineStream[k] = false
-			}
 
 			// download data
 			streamInfos, token, err := twitch.GetStreams(channels)
+			log.Debug("Stream info", streamInfos)
 			if err != nil {
 				fmt.Printf("Error getting twitch user: %v", err)
 			}
@@ -126,21 +124,35 @@ func scrapeStreams(twitch *Client) {
 			tokenRemaining.Set(float64(token))
 			lastScrape.Set(float64(time.Now().Unix()))
 
-			// process online stream
+			// generate a map to index the values
+			streamTable := make(map[string]*StreamData)
 			for _, streamInfo := range streamInfos {
-				// fmt.Printf("Stream %s: %s - %s, %d viewers\n", streamInfo.UserID, streamInfo.UserName, streamInfo.Title, streamInfo.ViewerCount)
-				onlineStream[streamInfo.UserID] = true
-				streamsUp[streamInfo.UserID].Set(1)
-				streamsViewers.With(prometheus.Labels{"name": channelsID[streamInfo.UserID]}).Set(float64(streamInfo.ViewerCount))
-				streamsUptime.With(prometheus.Labels{"name": channelsID[streamInfo.UserID]}).Set(float64(streamInfo.StartedAt.Unix()))
+				streamTable[streamInfo.UserID] = &streamInfo
 			}
 
-			// clean offline stream
-			for userID, online := range onlineStream {
-				if !online {
-					streamsUp[userID].Set(0)
-					streamsViewers.Delete(prometheus.Labels{"name": channelsID[userID]})
-					streamsUptime.Delete(prometheus.Labels{"name": channelsID[userID]})
+			// sync stream info with twitch state
+			for channelId := range channelsData {
+				if streamInfo, ok := streamTable[channelId]; ok {
+					channelsData[channelId].Online = true
+					channelsData[channelId].Viewers = streamInfo.ViewerCount
+					channelsData[channelId].Uptime = streamInfo.StartedAt.Unix()
+
+					// setting prometheus var
+					streamsUp[streamInfo.UserID].Set(1)
+					streamsViewers.With(prometheus.Labels{"name": channelsID[streamInfo.UserID]}).Set(float64(streamInfo.ViewerCount))
+					streamsUptime.With(prometheus.Labels{"name": channelsID[streamInfo.UserID]}).Set(float64(streamInfo.StartedAt.Unix()))
+
+				} else {
+
+					// updating json
+					channelsData[channelId].Online = false
+					channelsData[channelId].Uptime = 0
+					channelsData[channelId].Viewers = 0
+
+					//setting prometheus var
+					streamsUp[channelId].Set(0)
+					streamsViewers.Delete(prometheus.Labels{"name": channelsID[channelId]})
+					streamsUptime.Delete(prometheus.Labels{"name": channelsID[channelId]})
 				}
 			}
 
@@ -154,6 +166,7 @@ func scrapeStreams(twitch *Client) {
 			// Fill the information
 			for _, user := range users {
 				views.With(prometheus.Labels{"name": user.DisplayName}).Set(float64(user.ViewCount))
+				channelsData[user.ID].Views = user.ViewCount
 			}
 
 			// Update the follow count with the remaining tokens
@@ -167,6 +180,7 @@ func scrapeStreams(twitch *Client) {
 					fmt.Printf("Error getting twitch user: %v", err)
 				}
 				followers.With(prometheus.Labels{"name": channelsID[sid]}).Set(float64(followersCount))
+				channelsData[sid].Followers = followersCount
 				streamScraped++
 				if streamScraped >= len(streamsID) {
 					streamScraped = 0
@@ -185,7 +199,7 @@ func jsonStats(w http.ResponseWriter, r *http.Request) {
 	streamList := make([]Stream, len(channelsData))
 	var pos = 0
 	for _, stream := range channelsData {
-		streamList[pos] = stream
+		streamList[pos] = *stream
 		pos += 1
 	}
 	json.NewEncoder(w).Encode(streamList)
