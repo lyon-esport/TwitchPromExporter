@@ -110,6 +110,7 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 		query.Add("user_login", stream)
 	}
 	uri.RawQuery = query.Encode()
+	log.Debug("Streams query URL: ", uri.String())
 	res, err := c.doRequest("GET", uri.String(), nil)
 	if err != nil {
 		return nil, 0, err
@@ -135,7 +136,7 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 	} else {
 		token = 0
 	}
-	log.Debugf("Remaining tokens: %d", token)
+	log.Debugf("Stream remaining tokens: %d", token)
 
 	json.Unmarshal(body, &s)
 	return s.Data, token, nil
