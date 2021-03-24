@@ -207,24 +207,15 @@ func jsonStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(streamList)
 }
 
-type Config struct {
-	LogLevel string
-	ClientID string
-	Channels []string
-}
-
-var cfg Config
-
 func main() {
 	_ = dotenv.Load()
 
 	// Setup logging before anything else
-	if len(os.Getenv("LOG_LEVEL")) == 0 {
-		cfg.LogLevel = "info"
-	} else {
-		cfg.LogLevel = os.Getenv("LOG_LEVEL")
+	loglevel := os.Getenv("LOG_LEVEL")
+	if len(loglevel) == 0 {
+		loglevel = "info"
 	}
-	switch cfg.LogLevel {
+	switch loglevel {
 	case "info":
 		log.SetLevel(log.InfoLevel)
 	case "debug":
@@ -235,8 +226,13 @@ func main() {
 		log.SetLevel(log.ErrorLevel)
 	}
 
-	twitch := NewClient(os.Getenv("CLIENT_KEY"))
+	twitch := NewClient(os.Getenv("CLIENT_ID"))
 	channels = strings.Split(os.Getenv("CHANNELS"), ",")
+	listenAddr := os.Getenv("LISTEN_ADDR")
+	if len(listenAddr) == 0 {
+		listenAddr = "0.0.0.0"
+	}
+
 	log.Debugf("Channels: %s", channels)
 
 	users, err := twitch.GetUsers(channels)
@@ -249,5 +245,9 @@ func main() {
 
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/", jsonStats)
-	http.ListenAndServe(":2112", nil)
+
+	log.Printf("server is starting on %s", fmt.Sprintf("%s:2112", listenAddr))
+	if err = http.ListenAndServe(fmt.Sprintf("%s:2112", listenAddr), nil); err != nil {
+		log.Fatal(err)
+	}
 }
