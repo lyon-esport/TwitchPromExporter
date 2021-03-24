@@ -17,15 +17,17 @@ import (
 type StreamData struct {
 	ID           string    `json:"id"`
 	UserID       string    `json:"user_id"`
+	UserLogin    string    `json:"user_login"`
 	UserName     string    `json:"user_name"`
 	GameID       string    `json:"game_id"`
-	CommunityIds []string  `json:"community_ids"`
+	GameName     string		`json:"game_name"`
 	Type         string    `json:"type"`
 	Title        string    `json:"title"`
 	ViewerCount  int       `json:"viewer_count"`
 	StartedAt    time.Time `json:"started_at"`
 	Language     string    `json:"language"`
 	ThumbnailURL string    `json:"thumbnail_url"`
+	TagIDs		 []string  `json:"tag_ids"`
 }
 
 // UserData struct represents a user as defined by the twitch api
@@ -40,6 +42,7 @@ type UserData struct {
 	OfflineImageURL string `json:"offline_image_url"`
 	ViewCount       int    `json:"view_count"`
 	Email           string `json:"email"`
+	CreatedAt		string `json:"created_at"`
 }
 
 type UserFollow struct {
@@ -80,7 +83,6 @@ func (c Client) doRequest(method, uri string, body io.Reader) (*http.Response, e
 	if err != nil {
 		return nil, err
 	}
-
 	if res.StatusCode == 401 {
 		return nil, errors.New("server returned 401. likely caused due to an invalid client id")
 	} else if res.StatusCode != 200 {
@@ -142,7 +144,7 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 	return s.Data, token, nil
 }
 
-// GetStreams will get a list of live Streams
+// GetUsers will get a list of users information
 // The url query parameter are defined by the GetStreamsInput struct
 func (c Client) GetUsers(usersList []string) ([]UserData, error) {
 	var uri *url.URL
@@ -175,7 +177,7 @@ func (c Client) GetUsers(usersList []string) ([]UserData, error) {
 	return s.Data, nil
 }
 
-// GetStreams will get a list of live Streams
+// GetFollows will get the number of followers for a user
 // The url query parameter are defined by the GetStreamsInput struct
 func (c Client) GetFollows(userID string) (int, error) {
 	var uri *url.URL
