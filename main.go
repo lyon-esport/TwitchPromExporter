@@ -112,7 +112,7 @@ func scrapeStreams(twitch *Client) {
 		var streamScraped = 0
 
 		// if access token expire in 10 days renew it
-		if time.Now().After(twitch.Token.ExpiresDate.AddDate(0, 0, -10)) {
+		if time.Now().After(twitch.Token.RenewDate) {
 			err := twitch.GetToken()
 			if err != nil {
 				fmt.Printf("Error refreshing twitch token: %v", err)

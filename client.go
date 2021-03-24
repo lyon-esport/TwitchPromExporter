@@ -59,10 +59,10 @@ type Users struct {
 
 // Token represents a token used by client to interact with the twitch API
 type Token struct {
-	AccessToken  string `json:"access_token"`
-	ExpiresIn    int    `json:"expires_in"`
-	ExpiresDate  time.Time
-	TokenType    string `json:"token_type"`
+	AccessToken string `json:"access_token"`
+	ExpiresIn   int    `json:"expires_in"`
+	RenewDate   time.Time
+	TokenType   string `json:"token_type"`
 }
 
 // Client represents a client to interact with the twitch API
@@ -142,7 +142,10 @@ func (c *Client) GetToken() error {
 		return err
 	}
 	json.Unmarshal(body, &t)
-	t.ExpiresDate = time.Now().Add(time.Second * time.Duration(t.ExpiresIn))
+
+	var expireDate = time.Now().Add(time.Second * time.Duration(t.ExpiresIn))
+	var diffDate = expireDate.Sub(time.Now())
+	t.RenewDate = time.Now().Add(diffDate/2)
 
 	c.Token = t
 
