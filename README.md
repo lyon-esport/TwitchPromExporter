@@ -12,7 +12,7 @@ URL oAuth: https://127.0.0.1 (not used)
 Category: Analytics Tool
 ```
 
-On https://dev.twitch.tv/console/apps click on manage PromExporter application and get your client indentifier
+On https://dev.twitch.tv/console/apps click on manage PromExporter application and get your client indentifier & client secret
 
 ## Log level
 ```
@@ -30,6 +30,7 @@ For the channels, define an env variable **CHANNELS**, with a list of channel se
 ```bash
 $ export CHANNELS="youyoud2,froggedtv,mistermv"
 $ export CLIENT_ID="DFSKJFSDKJFSDKDFSJ"
+$ export CLIENT_SECRET="DFSKJFSDKJFSDKDFSJ"
 $ export LOG_LEVEL="info"
 $ export LISTEN_ADDR="0.0.0.0"
 $ go run .

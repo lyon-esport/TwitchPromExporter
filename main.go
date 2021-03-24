@@ -109,8 +109,17 @@ func scrapeStreams(twitch *Client) {
 		for id := range channelsID {
 			streamsID = append(streamsID, id)
 		}
-
 		var streamScraped = 0
+
+		// if access token expire in 10 days renew it
+		if time.Now().After(twitch.Token.ExpiresDate.AddDate(0, 0, -10)) {
+			err := twitch.GetToken()
+			if err != nil {
+				fmt.Printf("Error refreshing twitch token: %v", err)
+			}
+			log.Debug("New token generated")
+		}
+
 		for {
 
 			// download data
@@ -226,14 +235,19 @@ func main() {
 		log.SetLevel(log.ErrorLevel)
 	}
 
-	twitch := NewClient(os.Getenv("CLIENT_ID"))
 	channels = strings.Split(os.Getenv("CHANNELS"), ",")
+	log.Debugf("Channels: %s", channels)
+
 	listenAddr := os.Getenv("LISTEN_ADDR")
 	if len(listenAddr) == 0 {
 		listenAddr = "0.0.0.0"
 	}
 
-	log.Debugf("Channels: %s", channels)
+	twitch, err := NewClient(os.Getenv("CLIENT_ID"), os.Getenv("CLIENT_SECRET"))
+	if err != nil {
+		log.Fatal(err)
+		panic(err)
+	}
 
 	users, err := twitch.GetUsers(channels)
 	if err != nil {
