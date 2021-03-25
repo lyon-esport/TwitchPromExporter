@@ -209,6 +209,9 @@ func scrapeStreams(twitch *Client) {
 }
 
 func jsonStats(w http.ResponseWriter, r *http.Request) {
+	// Allow JS clients to access our data
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	log.Debug(len(channelsData), " Streams to serialize")
 	streamList := make([]Stream, len(channelsData))
 	var pos = 0
