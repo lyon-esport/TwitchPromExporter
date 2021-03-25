@@ -1,5 +1,8 @@
 # TwitchStats
-Prometheus exporter for twitch
+
+Prometheus exporter for twitch.
+
+Also export on the **/** endpoint stream statistics in JSON to integrate in your JS app.
 
 ## Get your client id
 
