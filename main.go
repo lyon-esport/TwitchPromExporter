@@ -23,12 +23,15 @@ type Stream struct {
 	Views     int    `json:"views"`
 }
 
-var channels []string
-var channelsData = make(map[string]*Stream)
-var channelsID = make(map[string]string)
-var streamsUp = map[string]prometheus.Gauge{}
-var streamsViewers, streamsUptime, views, followers *prometheus.GaugeVec
-var lastScrape, tokenRemaining prometheus.Gauge
+var (
+	version                                         = "development"
+	channels                                        []string
+	channelsData                                    = make(map[string]*Stream)
+	channelsID                                      = make(map[string]string)
+	streamsUp                                       = map[string]prometheus.Gauge{}
+	streamsViewers, streamsUptime, views, followers *prometheus.GaugeVec
+	lastScrape, tokenRemaining                      prometheus.Gauge
+)
 
 func setupVars(users []UserData) {
 
@@ -234,6 +237,8 @@ func main() {
 	case "error":
 		log.SetLevel(log.ErrorLevel)
 	}
+
+	log.Printf("Starting %s %s", os.Args[0], version)
 
 	channels = strings.Split(os.Getenv("CHANNELS"), ",")
 	log.Debugf("Channels: %s", channels)
