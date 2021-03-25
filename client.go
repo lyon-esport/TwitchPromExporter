@@ -17,15 +17,17 @@ import (
 type StreamData struct {
 	ID           string    `json:"id"`
 	UserID       string    `json:"user_id"`
+	UserLogin    string    `json:"user_login"`
 	UserName     string    `json:"user_name"`
 	GameID       string    `json:"game_id"`
-	CommunityIds []string  `json:"community_ids"`
+	GameName     string    `json:"game_name"`
 	Type         string    `json:"type"`
 	Title        string    `json:"title"`
 	ViewerCount  int       `json:"viewer_count"`
 	StartedAt    time.Time `json:"started_at"`
 	Language     string    `json:"language"`
 	ThumbnailURL string    `json:"thumbnail_url"`
+	TagIDs       []string  `json:"tag_ids"`
 }
 
 // UserData struct represents a user as defined by the twitch api
@@ -40,6 +42,7 @@ type UserData struct {
 	OfflineImageURL string `json:"offline_image_url"`
 	ViewCount       int    `json:"view_count"`
 	Email           string `json:"email"`
+	CreatedAt       string `json:"created_at"`
 }
 
 type UserFollow struct {
@@ -54,33 +57,50 @@ type Users struct {
 	Data []UserData `json:"data"`
 }
 
+// Token represents a token used by client to interact with the twitch API
+type Token struct {
+	AccessToken string `json:"access_token"`
+	ExpiresIn   int    `json:"expires_in"`
+	RenewDate   time.Time
+	TokenType   string `json:"token_type"`
+}
+
 // Client represents a client to interact with the twitch API
 type Client struct {
-	ClientID   string
-	httpClient *http.Client
+	ClientID     string
+	ClientSecret string
+	Token        Token
+	httpClient   *http.Client
 }
 
 // NewClient will initialize a new client for the twitch api
-func NewClient(cid string) *Client {
-	return &Client{
-		ClientID:   cid,
-		httpClient: &http.Client{},
+func NewClient(clientID, clientSecret string) (*Client, error) {
+	c := &Client{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		httpClient:   &http.Client{},
 	}
+
+	err := c.GetToken()
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
 }
 
-func (c Client) doRequest(method, uri string, body io.Reader) (*http.Response, error) {
+func (c Client) doRequest(method, uri string, header http.Header, body io.Reader) (*http.Response, error) {
 	r, err := http.NewRequest(method, uri, body)
 	if err != nil {
 		return nil, err
 	}
 
-	r.Header.Add("Client-ID", c.ClientID)
+	r.Header = header
 
 	res, err := c.httpClient.Do(r)
 	if err != nil {
 		return nil, err
 	}
-
 	if res.StatusCode == 401 {
 		return nil, errors.New("server returned 401. likely caused due to an invalid client id")
 	} else if res.StatusCode != 200 {
@@ -88,6 +108,48 @@ func (c Client) doRequest(method, uri string, body io.Reader) (*http.Response, e
 	}
 
 	return res, nil
+}
+
+// GetToken will get a Twitch API Bearer Token
+func (c *Client) GetToken() error {
+	var uri *url.URL
+
+	// set url
+	uri, err := url.Parse(baseAuthURL + getToken)
+	if err != nil {
+		return err
+	}
+
+	query := uri.Query()
+	query.Add("client_id", c.ClientID)
+	query.Add("client_secret", c.ClientSecret)
+	query.Add("grant_type", "client_credentials")
+	query.Add("scope", "")
+	uri.RawQuery = query.Encode()
+
+	log.Debug("URI: ", uri.String())
+
+	res, err := c.doRequest(http.MethodPost, uri.String(), http.Header{}, nil)
+	if err != nil {
+		return err
+	}
+
+	defer res.Body.Close()
+
+	t := Token{}
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	json.Unmarshal(body, &t)
+
+	var expireDate = time.Now().Add(time.Second * time.Duration(t.ExpiresIn))
+	var diffDate = expireDate.Sub(time.Now())
+	t.RenewDate = time.Now().Add(diffDate/2)
+
+	c.Token = t
+
+	return nil
 }
 
 // GetStreams will get a list of live Streams
@@ -99,11 +161,17 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 	}*/
 
 	var uri *url.URL
+	var header = http.Header{}
 
+	// set url
 	uri, err := url.Parse(baseURL + getStreamsEndpoint)
 	if err != nil {
 		return nil, 0, err
 	}
+
+	// set header
+	header.Add("Client-ID", c.ClientID)
+	header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token.AccessToken))
 
 	query := uri.Query()
 	for _, stream := range streamsList {
@@ -111,7 +179,7 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 	}
 	uri.RawQuery = query.Encode()
 	log.Debug("Streams query URL: ", uri.String())
-	res, err := c.doRequest("GET", uri.String(), nil)
+	res, err := c.doRequest(http.MethodGet, uri.String(), header, nil)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -142,15 +210,21 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 	return s.Data, token, nil
 }
 
-// GetStreams will get a list of live Streams
+// GetUsers will get a list of users information
 // The url query parameter are defined by the GetStreamsInput struct
 func (c Client) GetUsers(usersList []string) ([]UserData, error) {
 	var uri *url.URL
+	var header = http.Header{}
 
+	// set url
 	uri, err := url.Parse(baseURL + getUsersEndpoint)
 	if err != nil {
 		return nil, err
 	}
+
+	// set header
+	header.Add("Client-ID", c.ClientID)
+	header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token.AccessToken))
 
 	query := uri.Query()
 	for _, user := range usersList {
@@ -158,7 +232,7 @@ func (c Client) GetUsers(usersList []string) ([]UserData, error) {
 	}
 	uri.RawQuery = query.Encode()
 	log.Debug("URI: ", uri.String())
-	res, err := c.doRequest("GET", uri.String(), nil)
+	res, err := c.doRequest(http.MethodGet, uri.String(), header, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -175,21 +249,27 @@ func (c Client) GetUsers(usersList []string) ([]UserData, error) {
 	return s.Data, nil
 }
 
-// GetStreams will get a list of live Streams
+// GetFollows will get the number of followers for a user
 // The url query parameter are defined by the GetStreamsInput struct
 func (c Client) GetFollows(userID string) (int, error) {
 	var uri *url.URL
+	var header = http.Header{}
 
+	// set url
 	uri, err := url.Parse(baseURL + getUserFollow)
 	if err != nil {
 		return 0, err
 	}
 
+	// set header
+	header.Add("Client-ID", c.ClientID)
+	header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token.AccessToken))
+
 	query := uri.Query()
 	query.Add("to_id", userID)
 	uri.RawQuery = query.Encode()
 	log.Debug("URI: ", uri.String())
-	res, err := c.doRequest("GET", uri.String(), nil)
+	res, err := c.doRequest(http.MethodGet, uri.String(), header, nil)
 	if err != nil {
 		return 0, err
 	}

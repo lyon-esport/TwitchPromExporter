@@ -5,4 +5,7 @@ const (
 	getStreamsEndpoint = "/streams"
 	getUsersEndpoint   = "/users"
 	getUserFollow      = "/users/follows"
+
+	baseAuthURL = "https://id.twitch.tv"
+	getToken    = "/oauth2/token"
 )

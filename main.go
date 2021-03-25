@@ -112,8 +112,17 @@ func scrapeStreams(twitch *Client) {
 		for id := range channelsID {
 			streamsID = append(streamsID, id)
 		}
-
 		var streamScraped = 0
+
+		// if access token expire in 10 days renew it
+		if time.Now().After(twitch.Token.RenewDate) {
+			err := twitch.GetToken()
+			if err != nil {
+				fmt.Printf("Error refreshing twitch token: %v", err)
+			}
+			log.Debug("New token generated")
+		}
+
 		for {
 
 			// download data
@@ -210,24 +219,15 @@ func jsonStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(streamList)
 }
 
-type Config struct {
-	LogLevel string
-	ClientID string
-	Channels []string
-}
-
-var cfg Config
-
 func main() {
 	_ = dotenv.Load()
 
 	// Setup logging before anything else
-	if len(os.Getenv("LOG_LEVEL")) == 0 {
-		cfg.LogLevel = "info"
-	} else {
-		cfg.LogLevel = os.Getenv("LOG_LEVEL")
+	loglevel := os.Getenv("LOG_LEVEL")
+	if len(loglevel) == 0 {
+		loglevel = "info"
 	}
-	switch cfg.LogLevel {
+	switch loglevel {
 	case "info":
 		log.SetLevel(log.InfoLevel)
 	case "debug":
@@ -240,9 +240,19 @@ func main() {
 
 	log.Printf("Starting %s %s", os.Args[0], version)
 
-	twitch := NewClient(os.Getenv("CLIENT_KEY"))
 	channels = strings.Split(os.Getenv("CHANNELS"), ",")
 	log.Debugf("Channels: %s", channels)
+
+	listenAddr := os.Getenv("LISTEN_ADDR")
+	if len(listenAddr) == 0 {
+		listenAddr = "0.0.0.0"
+	}
+
+	twitch, err := NewClient(os.Getenv("CLIENT_ID"), os.Getenv("CLIENT_SECRET"))
+	if err != nil {
+		log.Fatal(err)
+		panic(err)
+	}
 
 	users, err := twitch.GetUsers(channels)
 	if err != nil {
@@ -254,5 +264,9 @@ func main() {
 
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/", jsonStats)
-	http.ListenAndServe(":2112", nil)
+
+	log.Printf("server is starting on %s", fmt.Sprintf("%s:2112", listenAddr))
+	if err = http.ListenAndServe(fmt.Sprintf("%s:2112", listenAddr), nil); err != nil {
+		log.Fatal(err)
+	}
 }
