@@ -145,7 +145,7 @@ func (c *Client) GetToken() error {
 
 	var expireDate = time.Now().Add(time.Second * time.Duration(t.ExpiresIn))
 	var diffDate = expireDate.Sub(time.Now())
-	t.RenewDate = time.Now().Add(diffDate/2)
+	t.RenewDate = time.Now().Add(diffDate / 2)
 
 	c.Token = t
 
