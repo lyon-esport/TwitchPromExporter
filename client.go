@@ -157,6 +157,7 @@ func (c *Client) GetToken() error {
 // The url query parameter are defined by the GetStreamsInput struct
 func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 	var s []StreamData
+	var token int
 
 	for i := 0; i < int(math.Ceil(float64(len(streamsList))/100)); i++ {
 		end := i*100+100
@@ -171,7 +172,7 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 		s = append(s, r...)
 	}
 
-	return s, 0, nil
+	return s, token, nil
 }
 
 // get100Streams will get a list of live Streams, limited to 100 users
