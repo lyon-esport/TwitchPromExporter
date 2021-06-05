@@ -201,7 +201,7 @@ func scrapeStreams(twitch *Client) {
 					break
 				}
 			}
-			log.Debug("Scraped ", streamScraped, "/", len(streamsID), " stream")
+			log.Debug("Scraped ", streamScraped, "/", len(streamsID), " streams")
 
 			time.Sleep(30 * time.Second)
 		}
