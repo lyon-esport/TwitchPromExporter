@@ -7,6 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -152,13 +153,33 @@ func (c *Client) GetToken() error {
 	return nil
 }
 
-// GetStreams will get a list of live Streams
+// GetStreams is a wrapper to handle more than 100 Streams
 // The url query parameter are defined by the GetStreamsInput struct
 func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
-	// since first, when uninitialized is 0, we have to set it to the default value
-	/*if i.First == 0 {
-		i.First = 20
-	}*/
+	var s []StreamData
+
+	for i := 0; i < int(math.Ceil(float64(len(streamsList))/100)); i++ {
+		end := i*100+100
+		if len(streamsList) < end {
+			end = len(streamsList)
+		}
+
+		r, token, err := c.get100Streams(streamsList[i*100:end])
+		if err != nil {
+			return s, token, nil
+		}
+		s = append(s, r...)
+	}
+
+	return s, 0, nil
+}
+
+// get100Streams will get a list of live Streams, limited to 100 users
+// The url query parameter are defined by the GetStreamsInput struct
+func (c Client) get100Streams(streamsList []string) ([]StreamData, int, error) {
+	if len(streamsList) >= 100 {
+		return nil, 0, errors.New("can't get more than 100 users")
+	}
 
 	var uri *url.URL
 	var header = http.Header{}
@@ -210,9 +231,31 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 	return s.Data, token, nil
 }
 
-// GetUsers will get a list of users information
+// GetUsers is a wrapper to handle more than 100 Users
 // The url query parameter are defined by the GetStreamsInput struct
 func (c Client) GetUsers(usersList []string) ([]UserData, error) {
+	var s []UserData
+
+	for i := 0; i < int(math.Ceil(float64(len(usersList))/100)); i++ {
+		end := i*100+100
+		if len(usersList) < end {
+			end = len(usersList)
+		}
+
+		r, err := c.get100Users(usersList[i*100:end])
+		if err != nil {
+			return s, nil
+		}
+
+		s = append(s, r...)
+	}
+
+	return s, nil
+}
+
+// get100Users will get a list of users information, limited to 100 users
+// The url query parameter are defined by the GetStreamsInput struct
+func (c Client) get100Users(usersList []string) ([]UserData, error) {
 	var uri *url.URL
 	var header = http.Header{}
 
@@ -283,6 +326,5 @@ func (c Client) GetFollows(userID string) (int, error) {
 	}
 
 	json.Unmarshal(body, &s)
-	// fmt.Println(s.Total)
 	return s.Total, nil
 }
