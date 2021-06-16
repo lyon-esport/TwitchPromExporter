@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+const MAX_STREAMS = 100
+
 // StreamData represents the data a single stream
 type StreamData struct {
 	ID           string    `json:"id"`
@@ -132,14 +134,17 @@ func (c *Client) GetToken() error {
 
 	res, err := c.doRequest(http.MethodPost, uri.String(), http.Header{}, nil)
 	if err != nil {
+		log.Error("Error while querying", err)
 		return err
 	}
 
+	log.Debug("Status code:", res.StatusCode)
 	defer res.Body.Close()
 
 	t := Token{}
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
+		log.Error("Error while reading json", err)
 		return err
 	}
 	json.Unmarshal(body, &t)
@@ -159,14 +164,19 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 	var s []StreamData
 	var token int
 
-	for i := 0; i < int(math.Ceil(float64(len(streamsList))/100)); i++ {
-		end := i*100+100
+	slices := int(math.Ceil(float64(len(streamsList)) / 100))
+
+	for i := 0; i < slices; i++ {
+		end := i*MAX_STREAMS + MAX_STREAMS
 		if len(streamsList) < end {
 			end = len(streamsList)
 		}
 
-		r, token, err := c.get100Streams(streamsList[i*100:end])
+		r, query_token, err := c.get100Streams(streamsList[i*MAX_STREAMS : end])
+		// Prevent shadow
+		token = query_token
 		if err != nil {
+			log.Error("Error while getting stream ", err)
 			return s, token, nil
 		}
 		s = append(s, r...)
@@ -178,7 +188,7 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 // get100Streams will get a list of live Streams, limited to 100 users
 // The url query parameter are defined by the GetStreamsInput struct
 func (c Client) get100Streams(streamsList []string) ([]StreamData, int, error) {
-	if len(streamsList) >= 100 {
+	if len(streamsList) > 100 {
 		return nil, 0, errors.New("can't get more than 100 users")
 	}
 
@@ -203,6 +213,7 @@ func (c Client) get100Streams(streamsList []string) ([]StreamData, int, error) {
 	log.Debug("Streams query URL: ", uri.String())
 	res, err := c.doRequest(http.MethodGet, uri.String(), header, nil)
 	if err != nil {
+		log.Error("Error while getting 100 stream ", err)
 		return nil, 0, err
 	}
 
@@ -211,6 +222,7 @@ func (c Client) get100Streams(streamsList []string) ([]StreamData, int, error) {
 	s := Streams{}
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
+		log.Error("Error while reading body ", err)
 		return nil, 0, err
 	}
 
@@ -220,6 +232,7 @@ func (c Client) get100Streams(streamsList []string) ([]StreamData, int, error) {
 		if len(strToken) > 0 {
 			token, err = strconv.Atoi(strToken[0])
 			if err != nil {
+				log.Error("Cant convert: ", err)
 				token = 0
 			}
 		}
@@ -238,17 +251,19 @@ func (c Client) GetUsers(usersList []string) ([]UserData, error) {
 	var s []UserData
 
 	for i := 0; i < int(math.Ceil(float64(len(usersList))/100)); i++ {
-		end := i*100+100
+		end := i*100 + 100
 		if len(usersList) < end {
 			end = len(usersList)
 		}
 
-		r, err := c.get100Users(usersList[i*100:end])
+		r, err := c.get100Users(usersList[i*100 : end])
 		if err != nil {
+			log.Error("Error while reggint str: ", err)
 			return s, nil
 		}
 
 		s = append(s, r...)
+		// log.Debug("Streams: ", s)
 	}
 
 	return s, nil
@@ -275,9 +290,9 @@ func (c Client) get100Users(usersList []string) ([]UserData, error) {
 		query.Add("login", user)
 	}
 	uri.RawQuery = query.Encode()
-	log.Debug("URI: ", uri.String())
 	res, err := c.doRequest(http.MethodGet, uri.String(), header, nil)
 	if err != nil {
+		log.Error("Error while getting streams info", err)
 		return nil, err
 	}
 
@@ -286,6 +301,7 @@ func (c Client) get100Users(usersList []string) ([]UserData, error) {
 	s := Users{}
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
+		log.Error("Error while getting streams json", err)
 		return nil, err
 	}
 
@@ -312,7 +328,7 @@ func (c Client) GetFollows(userID string) (int, error) {
 	query := uri.Query()
 	query.Add("to_id", userID)
 	uri.RawQuery = query.Encode()
-	log.Debug("URI: ", uri.String())
+	log.Debug("Follow URI: ", uri.String())
 	res, err := c.doRequest(http.MethodGet, uri.String(), header, nil)
 	if err != nil {
 		return 0, err

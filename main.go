@@ -127,7 +127,7 @@ func scrapeStreams(twitch *Client) {
 
 			// download data
 			streamInfos, token, err := twitch.GetStreams(channels)
-			log.Debug("Stream info", streamInfos)
+			// log.Debug("Stream info", streamInfos)
 			if err != nil {
 				fmt.Printf("Error getting twitch user: %v", err)
 			}
