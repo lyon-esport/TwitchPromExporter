@@ -13,3 +13,11 @@ updates:
     versions:
     - 1.7.1
     - 1.8.0
+# Check github actions are up to date.
+- package-ecosystem: "github-actions"
+  directory: "/"
+  schedule:
+    interval: "daily"
+    time: "04:00"
+  assignees:
+  - egguy
