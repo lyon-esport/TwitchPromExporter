@@ -164,7 +164,7 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 	var s []StreamData
 	var token int
 
-	slices := int(math.Ceil(float64(len(streamsList)) / 100))
+	slices := int(math.Ceil(float64(len(streamsList)) / MAX_STREAMS))
 
 	for i := 0; i < slices; i++ {
 		end := i*MAX_STREAMS + MAX_STREAMS
@@ -188,7 +188,7 @@ func (c Client) GetStreams(streamsList []string) ([]StreamData, int, error) {
 // get100Streams will get a list of live Streams, limited to 100 users
 // The url query parameter are defined by the GetStreamsInput struct
 func (c Client) get100Streams(streamsList []string) ([]StreamData, int, error) {
-	if len(streamsList) > 100 {
+	if len(streamsList) > MAX_STREAMS {
 		return nil, 0, errors.New("can't get more than 100 users")
 	}
 
@@ -250,13 +250,13 @@ func (c Client) get100Streams(streamsList []string) ([]StreamData, int, error) {
 func (c Client) GetUsers(usersList []string) ([]UserData, error) {
 	var s []UserData
 
-	for i := 0; i < int(math.Ceil(float64(len(usersList))/100)); i++ {
-		end := i*100 + 100
+	for i := 0; i < int(math.Ceil(float64(len(usersList))/MAX_STREAMS)); i++ {
+		end := i*MAX_STREAMS + MAX_STREAMS
 		if len(usersList) < end {
 			end = len(usersList)
 		}
 
-		r, err := c.get100Users(usersList[i*100 : end])
+		r, err := c.get100Users(usersList[i*MAX_STREAMS : end])
 		if err != nil {
 			log.Error("Error while reggint str: ", err)
 			return s, nil

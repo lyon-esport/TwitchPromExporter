@@ -251,6 +251,12 @@ func main() {
 		listenAddr = "0.0.0.0"
 	}
 
+	listenPort := os.Getenv("LISTEN_PORT")
+	if len(listenPort) == 0 {
+		listenPort = "2112"
+	}
+
+
 	twitch, err := NewClient(os.Getenv("CLIENT_ID"), os.Getenv("CLIENT_SECRET"))
 	if err != nil {
 		log.Fatal(err)
@@ -268,8 +274,8 @@ func main() {
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/", jsonStats)
 
-	log.Printf("server is starting on %s", fmt.Sprintf("%s:2112", listenAddr))
-	if err = http.ListenAndServe(fmt.Sprintf("%s:2112", listenAddr), nil); err != nil {
+	log.Printf("server is starting on %s", fmt.Sprintf("%s:%s", listenAddr, listenPort))
+	if err = http.ListenAndServe(fmt.Sprintf("%s:%s", listenAddr, listenPort), nil); err != nil {
 		log.Fatal(err)
 	}
 }

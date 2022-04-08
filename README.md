@@ -36,6 +36,7 @@ $ export CLIENT_ID="DFSKJFSDKJFSDKDFSJ"
 $ export CLIENT_SECRET="DFSKJFSDKJFSDKDFSJ"
 $ export LOG_LEVEL="info"
 $ export LISTEN_ADDR="0.0.0.0"
+$ export LISTEN_PORT="2112"
 $ go run .
 ```
 
